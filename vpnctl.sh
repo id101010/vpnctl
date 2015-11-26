@@ -1,8 +1,9 @@
 #!/bin/bash
 
-OVPNCFG="****"
-VPNCCFG="****"
+OVPNCFG="******"
+VPNCCFG="******"
 PIDPATH="/var/run/vpn/"
+PIDFILE="pid"
 OPTION="${1}"
 
 # ------------------------------------  Functions
@@ -15,10 +16,9 @@ Usage: $0 [options]
 This script is intended as an interface to multiple VPN services.
 
 OPTIONS:
-   -h --help            Show this message
-   -c --cisco           Connect to a cisco vpn
-   -o --openvpn         Connect to a openvpn server 
-   -k --kill            Kill all vpn connections
+   help                 Show this message
+   start [profile]      Connect to a ciscovpn or openvpn
+   stop                 Kill all vpn connections
 EOF
 }
 
@@ -32,12 +32,19 @@ check_root()
     fi
 }
 
+# Prints the current ip
+print_ip()
+{
+    sleep 4 && IP=$(curl icanhazip.com 2>/dev/null)
+    echo "[DEBUG] current ip: ${IP}" 2>&1
+}
+
 # Check if pid path exists
 check_pid_path()
 {
     if [[ -d ${PIDPATH} ]]
     then
-        echo "[DEBUG] Writing PID file to ${PIDPATH}pid" 2>&1
+        echo "[DEBUG] Writing PID file to ${PIDPATH}${PIDFILE}" 2>&1
     else
         mkdir ${PIDPATH}
     fi
@@ -47,56 +54,63 @@ check_pid_path()
 connect_openvpn()
 {
     check_pid_path
-    # Enable connection and check IP
-    cd "/etc/openvpn/" && openvpn --config "$OVPNCFG" --writepid "${PIDPATH}pid" --daemon
+    cd "/etc/openvpn/" && openvpn --config "$OVPNCFG" --writepid "${PIDPATH}${PIDFILE}" --daemon
     
-    sleep 4 && IP=$(curl icanhazip.com 2>/dev/null)
-    echo "[DEBUG] current ip: ${IP}" 2>&1
 }
 
 # Connects to a cisco 3000 vpn
 connect_cisco()
 {
     check_pid_path
-    vpnc --pid-file "${PIDPATH}pid" ${VPNCCFG}
-    
-    IP=$(curl icanhazip.com 2>/dev/null)
-    echo "[DEBUG] current ip: ${IP}" 2>&1
+    vpnc --pid-file "${PIDPATH}${PIDFILE}" ${VPNCCFG}
 }
 
 # Kill all vpn services.
 kill_connection()
 {
-    killall openvpn 2>/dev/null
-    killall vpnc 2>/dev/null
+    kill $(cat ${PIDPATH}${PIDFILE})
 }
 
 # ----------------------------------------
 
 check_root
 
-# Option Parsing
+# Option parsing
 case ${OPTION} in
-    -o|--openvpn)
-    echo "[DEBUG] Connecting to openvpn server."
-    connect_openvpn
-    exit 0
+    start)
+        shift
+
+        if [[ ${1} == "openvpn" ]]
+        then
+            echo "[DEBUG] Connecting to openvpn server."
+            connect_openvpn
+            print_ip
+            exit 0
+        fi
+        
+        if [[ ${1} == "cisco" ]]
+        then
+            echo "[DEBUG] Connecting to cisco vpn."
+            connect_cisco
+            print_ip
+            exit 0
+        fi
+
+        echo "[ERROR] No profile specified!"
+
+        exit 1
     ;;
-    -c|--cisco)
-    echo "[DEBUG] Connecting to cisco vpn."
-    connect_cisco
-    exit 0
+    stop)
+        echo "[DEBUG] Killing all vpn connections."
+        kill_connection
+        exit 0
     ;;
-    -k|--kill)
-    echo "[DEBUG] Killing all vpn connections."
-    kill_connection
-    exit 0
-    ;;
-    -h|--help)
-    usage
-    exit 0
+    help)
+        usage
+        exit 0
     ;;
     *)
-    exit 1 # Unknown option
+        echo "[ERROR] Unknown parameters."
+        exit 1
     ;;
 esac
