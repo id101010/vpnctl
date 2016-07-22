@@ -73,11 +73,10 @@ kill_connection()
 
 # ----------------------------------------
 
-check_root
-
 # Option parsing
 case ${OPTION} in
     start)
+        check_root
         shift
 
         if [[ ${1} == "openvpn" ]]
@@ -101,6 +100,7 @@ case ${OPTION} in
         exit 1
     ;;
     stop)
+        check_root
         echo "[DEBUG] Killing all vpn connections."
         kill_connection
         exit 0
@@ -111,6 +111,7 @@ case ${OPTION} in
     ;;
     *)
         echo "[ERROR] Unknown parameters."
+        usage
         exit 1
     ;;
 esac
